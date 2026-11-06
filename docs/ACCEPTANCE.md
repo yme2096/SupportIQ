@@ -1,0 +1,11 @@
+# Acceptance and product guardrails
+- Customer chat persists messages in PostgreSQL.
+- Approved policy knowledge is the source for policy answers.
+- Customer asks for a human, reports wrong/unhelpful answer, or reports damaged/defective item => create one open ticket and set conversation to WAITING_FOR_AGENT.
+- Refund questions without an order reference and verified refund status => escalate.
+- An INITIATED refund is explicitly not described as bank-credited; no credit date is promised.
+- Demo order SS-10022 is seeded sample data only.
+- Agent inbox shows ticket reason and conversation; agent can reply and update status.
+- Admin overview shows database-backed counts; knowledge upload stores TXT/MD documents.
+- Company registration, login, refresh/logout, password change/reset, team invitation, role authorization, audit logging, and tenant isolation have Phase 2 coverage; see `PHASE2_TEST_REPORT.md`.
+- Production release still requires email delivery/verification, secure upload review, payment-provider integration, production deployment configuration and monitoring, and an external security review.

@@ -1,0 +1,62 @@
+name: Approved Render production deployment
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    uses: ./.github/workflows/reusable-render-checks.yml
+    with:
+      ref: ${{ github.sha }}
+
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Trigger and wait for backend deployment
+        id: backend
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ vars.SUPPORTIQ_BACKEND_SERVICE_ID }}
+        run: .github/scripts/render-deploy.sh "$SERVICE_ID" "$GITHUB_SHA"
+
+      - name: Verify database-backed API health and public plans
+        env:
+          API_BASE: ${{ vars.SUPPORTIQ_BACKEND_URL }}
+        run: |
+          set -euo pipefail
+          health="$(curl --fail --silent --show-error "$API_BASE/api/v1/health")"
+          printf '%s' "$health" | jq -e '.status == "UP" and .database == "UP"' >/dev/null
+          curl --fail --silent --show-error "$API_BASE/api/public/billing/plans" | jq -e 'length >= 1' >/dev/null
+
+      - name: Trigger and wait for document worker deployment
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ vars.SUPPORTIQ_WORKER_SERVICE_ID }}
+        run: .github/scripts/render-deploy.sh "$SERVICE_ID" "$GITHUB_SHA"
+
+      - name: Trigger and wait for frontend deployment
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ vars.SUPPORTIQ_FRONTEND_SERVICE_ID }}
+        run: .github/scripts/render-deploy.sh "$SERVICE_ID" "$GITHUB_SHA"
+
+      - name: Smoke test the frontend, SPA routes, and embedded widget
+        env:
+          FRONTEND_BASE: ${{ vars.SUPPORTIQ_FRONTEND_URL }}
+        run: |
+          set -euo pipefail
+          for path in / /pricing /platform /chat/shopsmart /orders/shopsmart; do
+            status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$FRONTEND_BASE$path")"
+            test "$status" = "200"
+          done
+          curl --fail --silent --show-error --output /dev/null "$FRONTEND_BASE/supportiq-widget.js"
+
+      - name: Recheck backend after all deployments
+        env:
+          API_BASE: ${{ vars.SUPPORTIQ_BACKEND_URL }}
+        run: curl --fail --silent --show-error "$API_BASE/api/v1/health" | jq -e '.status == "UP" and .database == "UP"' >/dev/null

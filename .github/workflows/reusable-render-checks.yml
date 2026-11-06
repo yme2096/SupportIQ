@@ -1,0 +1,88 @@
+name: Reusable production verification
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: supportiq
+          POSTGRES_USER: supportiq
+          POSTGRES_PASSWORD: supportiq_test_password
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U supportiq -d supportiq"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Run isolated backend tests
+        working-directory: backend
+        env:
+          DB_URL: jdbc:postgresql://localhost:5432/supportiq?currentSchema=phase7_test,public
+          DB_USERNAME: supportiq
+          DB_PASSWORD: supportiq_test_password
+          SPRING_FLYWAY_DEFAULT_SCHEMA: phase7_test
+          SPRING_FLYWAY_SCHEMAS: phase7_test
+          SPRING_FLYWAY_CREATE_SCHEMAS: "true"
+          SUPPORTIQ_JWT_SECRET: phase7-ci-test-key-with-at-least-32-characters
+          BILLING_PROVIDER: DEMO
+          BILLING_WEBHOOK_SECRET: phase7-ci-webhook-secret
+          PAYMENT_PROVIDER: DEMO
+          PAYMENT_LIVE_ENABLED: "false"
+          PAYMENT_WEBHOOK_SECRET: phase7-ci-payment-secret
+          SEED_DEMO_ADMIN: "false"
+          LOCAL_AUTH_LINK_EXPOSURE: "true"
+          FRONTEND_ORIGIN: http://localhost:5173
+          FRONTEND_URL: http://localhost:5173
+        run: mvn -B test
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: npm test
+      - run: npm run build
+      - run: node --check public/supportiq-widget.js
+
+  container-builds:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Build backend image
+        run: docker build -t supportiq-backend:ci backend
+      - name: Build frontend image
+        run: docker build --build-arg VITE_API_BASE_URL=https://api.invalid -t supportiq-frontend:ci frontend

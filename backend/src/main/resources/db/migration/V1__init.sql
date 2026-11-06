@@ -1,0 +1,16 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE TABLE companies(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),name VARCHAR(160) NOT NULL,slug VARCHAR(100) UNIQUE NOT NULL);
+CREATE TABLE knowledge_documents(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),company_id UUID NOT NULL REFERENCES companies(id),file_name VARCHAR(255) NOT NULL,content TEXT NOT NULL,status VARCHAR(20) NOT NULL DEFAULT 'READY',created_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE conversations(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),company_id UUID NOT NULL REFERENCES companies(id),customer_name VARCHAR(160) NOT NULL DEFAULT 'Guest customer',status VARCHAR(30) NOT NULL DEFAULT 'BOT_ACTIVE',escalation_reason TEXT,created_at TIMESTAMPTZ DEFAULT now(),updated_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE messages(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,sender_type VARCHAR(20) NOT NULL,content TEXT NOT NULL,sources JSONB NOT NULL DEFAULT '[]'::jsonb,created_at TIMESTAMPTZ DEFAULT now());
+CREATE INDEX idx_messages_conversation ON messages(conversation_id,created_at);
+CREATE TABLE support_tickets(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),company_id UUID NOT NULL REFERENCES companies(id),conversation_id UUID NOT NULL REFERENCES conversations(id),title VARCHAR(255) NOT NULL,reason TEXT NOT NULL,priority VARCHAR(20) NOT NULL DEFAULT 'NORMAL',status VARCHAR(20) NOT NULL DEFAULT 'OPEN',assigned_agent VARCHAR(160),created_at TIMESTAMPTZ DEFAULT now(),updated_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE demo_orders(order_ref VARCHAR(40) PRIMARY KEY,company_id UUID NOT NULL REFERENCES companies(id),amount NUMERIC(12,2) NOT NULL,currency VARCHAR(3) NOT NULL DEFAULT 'INR',order_status VARCHAR(40) NOT NULL,refund_status VARCHAR(40),refund_reference VARCHAR(100));
+INSERT INTO companies(id,name,slug) VALUES('11111111-1111-1111-1111-111111111111','ShopSmart Demo','shopsmart');
+INSERT INTO knowledge_documents(company_id,file_name,content) VALUES
+('11111111-1111-1111-1111-111111111111','Return and Refund Policy.txt','Customers may request a return within 7 calendar days after delivery. Items must be unused and include original packaging. Refunds are initiated only after inspection. Bank credit timing depends on payment method and bank. Support agents must verify transaction status before confirming credit. Never promise a specific credit date. Damaged or incorrect items must be escalated to a human support agent.'),
+('11111111-1111-1111-1111-111111111111','Shipping Policy.txt','Standard delivery usually takes 3 to 5 business days after dispatch. Courier delays require checking the latest tracking record.'),
+('11111111-1111-1111-1111-111111111111','Warranty Policy.txt','Eligible electronics carry a 1-year limited manufacturer warranty. Physical damage and liquid damage are excluded. Warranty claims require human agent review.');
+INSERT INTO demo_orders(order_ref,company_id,amount,currency,order_status,refund_status,refund_reference) VALUES
+('SS-10021','11111111-1111-1111-1111-111111111111',2499,'INR','DELIVERED',NULL,NULL),
+('SS-10022','11111111-1111-1111-1111-111111111111',1599,'INR','REFUND_INITIATED','INITIATED','DEMO-ARN-784512');

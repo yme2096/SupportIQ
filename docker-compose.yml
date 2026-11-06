@@ -1,0 +1,132 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: supportiq
+      POSTGRES_USER: supportiq
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-supportiq_dev_password}
+    volumes: [supportiq_pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U supportiq -d supportiq"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: default
+      DB_URL: jdbc:postgresql://postgres:5432/supportiq
+      DB_USERNAME: supportiq
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-supportiq_dev_password}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-gemini}
+      GEMINI_EMBEDDING_API_KEY: ${GEMINI_EMBEDDING_API_KEY:-}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-2}
+      RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-1800}
+      RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-240}
+      AI_PROCESSING_DISPATCH_LOCALLY: ${AI_PROCESSING_DISPATCH_LOCALLY:-true}
+      FRONTEND_ORIGIN: http://localhost:5173
+      FRONTEND_URL: http://localhost:5173
+      SUPPORTIQ_JWT_SECRET: ${SUPPORTIQ_JWT_SECRET:-local-development-signing-key-change-in-production-012345}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      LOCAL_AUTH_LINK_EXPOSURE: ${LOCAL_AUTH_LINK_EXPOSURE:-true}
+      SEED_DEMO_ADMIN: ${SEED_DEMO_ADMIN:-true}
+      DEMO_ADMIN_EMAIL: ${DEMO_ADMIN_EMAIL:-admin@shopsmart.demo}
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:-ChangeMeInLocalDevOnly!}
+      DEMO_ADMIN_NAME: ${DEMO_ADMIN_NAME:-ShopSmart Demo Admin}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-DEMO}
+      PAYMENT_LIVE_ENABLED: ${PAYMENT_LIVE_ENABLED:-false}
+      PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:-local-demo-webhook-secret-change-before-deploy}
+      BILLING_PROVIDER: ${BILLING_PROVIDER:-DEMO}
+      BILLING_WEBHOOK_SECRET: ${BILLING_WEBHOOK_SECRET:-local-demo-billing-secret-change-before-deploy}
+      BILLING_GRACE_DAYS: ${BILLING_GRACE_DAYS:-7}
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-}
+      SUPER_ADMIN_NAME: ${SUPER_ADMIN_NAME:-SupportIQ Platform Admin}
+    ports: ["8080:8080"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:8080
+    ports: ["5173:80"]
+    depends_on: [backend]
+  worker:
+    profiles: ["dedicated-worker"]
+    build: ./backend
+    restart: unless-stopped
+    command: ["worker"]
+    environment:
+      SPRING_PROFILES_ACTIVE: default
+      DB_URL: jdbc:postgresql://postgres:5432/supportiq
+      DB_USERNAME: supportiq
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-supportiq_dev_password}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-gemini}
+      GEMINI_EMBEDDING_API_KEY: ${GEMINI_EMBEDDING_API_KEY:-}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-2}
+      RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-1800}
+      RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-240}
+      AI_PROCESSING_DISPATCH_LOCALLY: "false"
+      AI_WORKER_ENABLED: "true"
+      FRONTEND_ORIGIN: http://localhost:5173
+      FRONTEND_URL: http://localhost:5173
+      SUPPORTIQ_JWT_SECRET: ${SUPPORTIQ_JWT_SECRET:-local-development-signing-key-change-in-production-012345}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      LOCAL_AUTH_LINK_EXPOSURE: ${LOCAL_AUTH_LINK_EXPOSURE:-true}
+      SEED_DEMO_ADMIN: "false"
+      PAYMENT_PROVIDER: DEMO
+      PAYMENT_LIVE_ENABLED: "false"
+      PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:-local-demo-webhook-secret-change-before-deploy}
+      BILLING_PROVIDER: DEMO
+      BILLING_WEBHOOK_SECRET: ${BILLING_WEBHOOK_SECRET:-local-demo-billing-secret-change-before-deploy}
+      BILLING_GRACE_DAYS: ${BILLING_GRACE_DAYS:-7}
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-}
+      SUPER_ADMIN_NAME: ${SUPER_ADMIN_NAME:-SupportIQ Platform Admin}
+    depends_on:
+      postgres:
+        condition: service_healthy
+  backend-tests:
+    profiles: ["test"]
+    build:
+      context: ./backend
+      target: build
+    command: ["mvn", "-B", "test"]
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/supportiq?currentSchema=phase7_test,public
+      DB_USERNAME: supportiq
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-supportiq_dev_password}
+      SPRING_FLYWAY_DEFAULT_SCHEMA: phase7_test
+      SPRING_FLYWAY_SCHEMAS: phase7_test
+      SPRING_FLYWAY_CREATE_SCHEMAS: "true"
+      SUPPORTIQ_JWT_SECRET: ${SUPPORTIQ_JWT_SECRET:-local-development-signing-key-change-in-production-012345}
+      SEED_DEMO_ADMIN: "false"
+      LOCAL_AUTH_LINK_EXPOSURE: "true"
+      FRONTEND_URL: http://localhost:5173
+      FRONTEND_ORIGIN: http://localhost:5173
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-gemini}
+      GEMINI_EMBEDDING_API_KEY: ${GEMINI_EMBEDDING_API_KEY:-}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-2}
+      RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-1800}
+      RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-240}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-DEMO}
+      PAYMENT_LIVE_ENABLED: "false"
+      PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:-local-demo-webhook-secret-change-before-deploy}
+      BILLING_PROVIDER: DEMO
+      BILLING_WEBHOOK_SECRET: ${BILLING_WEBHOOK_SECRET:-local-demo-billing-secret-change-before-deploy}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend/src:/workspace/src
+volumes:
+  supportiq_pgdata:

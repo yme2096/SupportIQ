@@ -1,0 +1,169 @@
+# Render Blueprint for a NEW production environment.
+# Review plan costs and service names before clicking Apply in Render.
+services:
+  - type: web
+    runtime: static
+    name: supportiq-frontend
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    autoDeployTrigger: off
+    envVars:
+      - key: VITE_API_BASE_URL
+        fromService:
+          type: web
+          name: supportiq-backend
+          envVarKey: RENDER_EXTERNAL_URL
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Strict-Transport-Security
+        value: max-age=31536000; includeSubDomains
+
+  - type: web
+    runtime: docker
+    name: supportiq-backend
+    region: singapore
+    plan: 0.5c-512mb
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/v1/health
+    autoDeployTrigger: off
+    maxShutdownDelaySeconds: 150
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: supportiq-db
+          property: connectionString
+      - key: PORT
+        value: "10000"
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: SUPPORTIQ_JWT_SECRET
+        generateValue: true
+      - key: AUTH_COOKIE_SECURE
+        value: "true"
+      - key: LOCAL_AUTH_LINK_EXPOSURE
+        value: "false"
+      - key: SEED_DEMO_ADMIN
+        value: "false"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: EMBEDDING_PROVIDER
+        value: gemini
+      - key: GEMINI_EMBEDDING_API_KEY
+        sync: false
+      - key: GEMINI_EMBEDDING_MODEL
+        value: gemini-embedding-2
+      - key: GEMINI_MODEL
+        value: gemini-3.8-flash
+      - key: RAG_CHUNK_SIZE
+        value: "1800"
+      - key: RAG_CHUNK_OVERLAP
+        value: "240"
+      - key: DB_POOL_MAX_SIZE
+        value: "8"
+      - key: DB_POOL_MIN_IDLE
+        value: "2"
+      - key: AI_PROCESSING_DISPATCH_LOCALLY
+        value: "false"
+      - key: AI_WORKER_ENABLED
+        value: "false"
+      - key: AI_WORKER_POLL_MS
+        value: "5000"
+      - key: AI_WORKER_STALE_MINUTES
+        value: "30"
+      - key: PAYMENT_PROVIDER
+        value: DEMO
+      - key: PAYMENT_LIVE_ENABLED
+        value: "false"
+      - key: PAYMENT_WEBHOOK_SECRET
+        generateValue: true
+      - key: BILLING_PROVIDER
+        value: DEMO
+      - key: BILLING_WEBHOOK_SECRET
+        generateValue: true
+      - key: BILLING_GRACE_DAYS
+        value: "7"
+
+  - type: worker
+    runtime: docker
+    name: supportiq-worker
+    region: singapore
+    plan: 0.5c-512mb
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: worker
+    autoDeployTrigger: off
+    maxShutdownDelaySeconds: 150
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: supportiq-db
+          property: connectionString
+      - key: FRONTEND_ORIGIN
+        fromService:
+          type: web
+          name: supportiq-backend
+          envVarKey: FRONTEND_ORIGIN
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: supportiq-backend
+          envVarKey: FRONTEND_URL
+      - key: SUPPORTIQ_JWT_SECRET
+        fromService:
+          type: web
+          name: supportiq-backend
+          envVarKey: SUPPORTIQ_JWT_SECRET
+      - key: GEMINI_API_KEY
+        fromService:
+          type: web
+          name: supportiq-backend
+          envVarKey: GEMINI_API_KEY
+      - key: EMBEDDING_PROVIDER
+        value: gemini
+      - key: GEMINI_EMBEDDING_API_KEY
+        fromService:
+          type: web
+          name: supportiq-backend
+          envVarKey: GEMINI_EMBEDDING_API_KEY
+      - key: GEMINI_EMBEDDING_MODEL
+        value: gemini-embedding-2
+      - key: DB_POOL_MAX_SIZE
+        value: "3"
+      - key: DB_POOL_MIN_IDLE
+        value: "1"
+      - key: AI_PROCESSING_DISPATCH_LOCALLY
+        value: "false"
+      - key: AI_WORKER_ENABLED
+        value: "true"
+      - key: AI_WORKER_POLL_MS
+        value: "5000"
+      - key: AI_WORKER_STALE_MINUTES
+        value: "30"
+
+databases:
+  - name: supportiq-db
+    databaseName: supportiq
+    user: supportiq
+    region: singapore
+    plan: 0.5c-1g
+    diskSizeGB: 15
+    postgresMajorVersion: "16"
+    connectionPool: none
+    ipAllowList: []

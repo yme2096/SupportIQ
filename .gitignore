@@ -1,0 +1,61 @@
+# Environment files; only the placeholder template is allowed.
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Credentials, certificates, and local configuration.
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+secrets/
+
+# Dependencies and generated build/test output.
+**/node_modules/
+**/target/
+**/dist/
+coverage/
+**/coverage/
+.nyc_output/
+playwright-report/
+test-results/
+**/test-results/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+
+# Local databases, customer data, backups, and runtime artifacts.
+backups/
+**/backups/
+.local-readiness/
+**/.local-readiness/
+*.dump
+*.pgdump
+*.backup
+*.bak
+*.sqlite
+*.sqlite3
+*.db
+*.log
+logs/
+data/
+postgres-data/
+
+# Local engineering reports (kept on the developer machine).
+FINAL_LOCAL_READINESS_REPORT.md
+LOCAL_REGRESSION_TEST_REPORT.md
+INITIAL_AUDIT_REPORT.md
+SUPPORTIQ_COMPLETION_CHECKLIST.md
+
+# OS and editor files.
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
